@@ -1,3 +1,78 @@
+#
+Класс NeoSWSerial предназначен для более эффективной замены встроенного программного обеспечения класса Arduino. Если вы могли бы использовать Serial, Serial1, Serial2 или Serial3, вам следует использовать вместо этого NeoHWSerial. Если бы вы могли использовать входной вывод захвата (ICP1, контакты 8 и 9 на UNO), вам следует вместо этого рассмотреть NeoICSerial.
+
+NeoSWSerial ограничен четырьмя скоростями передачи данных: 9600 (по умолчанию), 19200, 31250 (MIDI) и 38400.
+
+Методы класса почти идентичны встроенному программному обеспечению, за исключением двух новых методов, attachInterrupt и detachInterrupt:
+
+```
+    typedef void (* isr_t)( uint8_t );
+    void attachInterrupt( isr_t fn );
+    void detachInterrupt() { attachInterrupt( (isr_t) NULL ); };
+
+  private:
+    isr_t  _isr;
+```
+
+Есть пять, нет, шесть преимуществ перед программным обеспечением.:
+
+1) Он использует гораздо меньше процессорного времени.
+
+2) Одновременная передача и прием полностью поддерживаются.
+
+3) Прерывания не отключаются в течение всего времени действия символа RX. (Они отключены в течение большей части времени каждого символа TX.)
+
+4) Это намного надежнее (гораздо меньше ошибок при получении данных).
+
+5) Символы могут обрабатываться с помощью определенной пользователем процедуры во время прерывания. Это должно предотвратить большинство проблем с переполнением входного буфера. Просто зарегистрируйте свою процедуру в экземпляре "NeoSWSerial":
+
+```
+    #include <NeoSWSerial.h>
+    NeoSWSerial ss( 4, 3 );
+    
+    volatile uint32_t newlines = 0UL;
+    
+    static void handleRxChar( uint8_t c )
+    {
+      if (c == '\n')
+        newlines++;
+    }
+    
+    void setup()
+    {
+      ss.attachInterrupt( handleRxChar );
+      ss.begin( 9600 );
+    }
+```
+
+Помните, что зарегистрированная процедура вызывается из контекста прерывания, и она должна возвращаться как можно быстрее. Слишком много времени на выполнение процедуры приведет ко многим непредсказуемым последствиям, включая потерю полученных данных. Смотрите аналогичные предупреждения для встроенного устройства attachInterrupt для цифровых контактов.
+
+Зарегистрированная процедура будет вызываться из ISR всякий раз, когда будет получен символ. Полученный символ не будет сохранен в rx_buffer, и он не будет возвращен из read(). Любые символы, которые были получены и буферизованы до вызова attachInterrupt, остаются в rx_buffer и могут быть извлечены путем вызова read().
+
+Если attachInterrupt никогда не вызывается или передается процедура NULL, происходит обычная буферизация, и все полученные символы должны быть получены путем вызова read().
+
+6) NeoSWSerial ISR могут быть отключены. Это может помочь вам избежать конфликтов при связывании с другими библиотеками PinChangeInterrupt, такими как enableinterrupt:
+
+```
+void myDeviceISR()
+{
+  NeoSWSerial::rxISR( *portInputRegister( digitalPinToPort( RX_PIN ) ) );
+  // if you know the exact PIN register, you could do this:
+  //    NeoSWSerial::rxISR( PIND );
+}
+
+void setup()
+{
+  myDevice.begin( 9600 );
+  enableInterrupt( RX_PIN, myDeviceISR, CHANGE );
+  enableInterrupt( OTHER_PIN, otherISR, RISING );
+}
+```
+
+Этот класс поддерживает следующие микроконтроллеры: attinyx61, attinyx4, attinyx5, ATmega328P (Pro, UNO, Nano), ATmega32U4 (Micro, Leonardo), ATmega2560 (Mega), ATmega2560RFR2, ATmega1284P и atmega1286
+#
+#
+
 The **NeoSWSerial** class is intended as an more-efficient drop-in replacement for the Arduino built-in class `SoftwareSerial`.  If you could use `Serial`, `Serial1`, `Serial2` or `Serial3`, you should use [NeoHWSerial](https://github.com/SlashDevin/NeoHWSerial) instead.  If you could use an Input Capture pin (ICP1, pins 8 & 9 on an UNO), you should consider  [NeoICSerial](https://github.com/SlashDevin/NeoICSerial) instead.
 
 **NeoSWSerial** is limited to four baud rates: 9600 (default), 19200, 31250 (MIDI) and 38400.
